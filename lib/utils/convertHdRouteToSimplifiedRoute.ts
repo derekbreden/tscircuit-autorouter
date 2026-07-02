@@ -28,6 +28,12 @@ export interface ConvertHdRouteToSimplifiedRouteOptions {
   defaultViaHoleDiameter?: number
   obstacles?: ReadonlyArray<Obstacle>
   connMap?: ConnectivityMap
+  /**
+   * "through-hole": rewrite every emitted via to span the full stack (top↔bottom). Sound
+   * because in this mode the mesh only births vias where the whole column is clear, so spanning
+   * a via top↔bottom crosses no foreign copper. "any" (default): keep the via's own z-span.
+   */
+  viaMode?: "through-hole" | "any"
 }
 
 /**
@@ -343,7 +349,7 @@ export const convertHdRouteToSimplifiedRoute = (
     }
   }
 
-  return attachTerminalViasToSimplifiedRoute({
+  const withTerminalVias = attachTerminalViasToSimplifiedRoute({
     route: result,
     hdRoute,
     layerCount,
@@ -351,4 +357,20 @@ export const convertHdRouteToSimplifiedRoute = (
     tolerance: opts.terminalViaAttachTolerance,
     defaultViaHoleDiameter: opts.defaultViaHoleDiameter,
   })
+
+  // THROUGH-HOLE via mode: span every via top↔bottom. The mesh only births a via where the full
+  // column is clear (see RectDiffPipeline's through-hole node split), so widening its span to the
+  // outer layers crosses no foreign copper — it's a manufacturable drilled hole, not a re-labeled
+  // blind via. No-op on ≤2-layer boards (every via is already top↔bottom).
+  if (opts.viaMode === "through-hole" && layerCount > 2) {
+    const topLayer = mapZToLayerName(0, layerCount)
+    const bottomLayer = mapZToLayerName(layerCount - 1, layerCount)
+    return withTerminalVias.map((seg) =>
+      seg.route_type === "via"
+        ? { ...seg, from_layer: topLayer, to_layer: bottomLayer }
+        : seg,
+    )
+  }
+
+  return withTerminalVias
 }

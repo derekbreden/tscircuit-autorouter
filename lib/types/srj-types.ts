@@ -64,6 +64,13 @@ export interface SimpleRouteJson {
   allowJumpers?: boolean
   /** Available jumper types for routing. Defaults to ["0603"] */
   availableJumperTypes?: JumperType[]
+  /**
+   * "through-hole": every via must be a full-stack (top↔bottom) drilled hole — no blind/buried
+   * vias (JLCPCB standard assembly, and most low-cost fabs). The mesh only makes a node
+   * via-capable where the full board column is clear (so a via is never drilled through a pad),
+   * and emitted vias span top↔bottom. "any" (default): blind/buried vias between any layers.
+   */
+  viaMode?: "through-hole" | "any"
 }
 
 export interface Obstacle {
