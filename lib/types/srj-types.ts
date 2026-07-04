@@ -46,6 +46,8 @@ export type JumperType = "1206x4" | "0603"
 export interface SimpleRouteJson {
   layerCount: number
   minTraceWidth: number
+  /** Min trace-to-copper clearance; reserved around obstacles when the mesh is built. */
+  minTraceClearance?: number
   nominalTraceWidth?: number
   /** @deprecated Use `min_via_pad_diameter` / `minViaPadDiameter` instead. */
   minViaDiameter?: number
