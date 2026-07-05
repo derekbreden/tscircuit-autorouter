@@ -53,6 +53,7 @@ import { StrawSolver } from "../../solvers/StrawSolver/StrawSolver"
 import { TraceSimplificationSolver } from "../../solvers/TraceSimplificationSolver/TraceSimplificationSolver"
 import { TraceWidthSolver } from "../../solvers/TraceWidthSolver/TraceWidthSolver"
 import { PreprocessSimpleRouteJsonSolver } from "./PreprocessSimpleRouteJsonSolver"
+import { mapZToLayerName } from "lib/utils/mapZToLayerName"
 
 interface CapacityMeshSolverOptions {
   capacityDepth?: number
@@ -493,6 +494,20 @@ export class AutoroutingPipelineSolver4_TinyHypergraph extends BaseSolver {
   }
 
   private setSimpleRouteJson(srj: SimpleRouteJson) {
+    // A plated through-hole is emitted as an obstacle on ["top","bottom"] (its two copper pad
+    // rings), but the drilled barrel occupies every layer in between. Expand any obstacle that
+    // spans both outer layers to all layers, so the mesh and every routing stage clear the barrel
+    // on the inner layers too instead of threading a trace through it.
+    const layerCount = srj.layerCount
+    const allZ = Array.from({ length: layerCount }, (_, i) => i)
+    const allLayers = allZ.map((z) => mapZToLayerName(z, layerCount))
+    srj.obstacles = (srj.obstacles ?? []).map((o) =>
+      o.layers?.includes("top") &&
+      o.layers.includes("bottom") &&
+      o.layers.length < layerCount
+        ? { ...o, layers: allLayers, zLayers: allZ }
+        : o,
+    )
     this.srj = srj
     const viaDimensions = getViaDimensions(this.srj)
     this.viaDiameter = viaDimensions.padDiameter
