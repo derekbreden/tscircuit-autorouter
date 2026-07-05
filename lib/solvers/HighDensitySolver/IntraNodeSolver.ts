@@ -72,6 +72,12 @@ export class IntraNodeRouteSolver extends BaseSolver {
   viaDiameter: number
   traceWidth: number
   obstacleMargin: number
+  // Copper (traces + vias) already routed in OTHER nodes that lies near this
+  // node's bounds. The intra-node solver is otherwise blind to it, so a via or
+  // trace here can graze foreign copper across a node boundary. Feeding it in as
+  // obstacle routes makes the router clear it while drawing — the cross-node
+  // trace/via clearance the per-node solve can't see on its own.
+  externalObstacleRoutes: HighDensityIntraNodeRoute[]
   rerouteAttemptsByConnection: Map<string, number>
 
   POSTROUTE_VIA_TRACE_CLEARANCE = 0.1
@@ -99,6 +105,7 @@ export class IntraNodeRouteSolver extends BaseSolver {
     traceWidth?: number
     obstacleMargin?: number
     obstacles?: Obstacle[]
+    externalObstacleRoutes?: HighDensityIntraNodeRoute[]
     layerCount?: number
   }) {
     const { nodeWithPortPoints, colorMap } = params
@@ -112,6 +119,7 @@ export class IntraNodeRouteSolver extends BaseSolver {
     this.viaDiameter = params.viaDiameter ?? 0.3
     this.traceWidth = params.traceWidth ?? 0.15
     this.obstacleMargin = params.obstacleMargin ?? 0.15
+    this.externalObstacleRoutes = params.externalObstacleRoutes ?? []
     const unsolvedConnectionsMap: Map<string, ConnectionPoint[]> = new Map()
     this.rootConnectionNameByConnectionName = new Map()
     for (const {
@@ -237,11 +245,11 @@ export class IntraNodeRouteSolver extends BaseSolver {
         z: points[points.length - 1].z,
       },
       obstacleRoutes: this.connMap
-        ? this.solvedRoutes.filter(
+        ? [...this.solvedRoutes, ...this.externalObstacleRoutes].filter(
             (sr) =>
               !this.connMap!.areIdsConnected(sr.connectionName, connectionName),
           )
-        : this.solvedRoutes,
+        : [...this.solvedRoutes, ...this.externalObstacleRoutes],
       futureConnections: this.unsolvedConnections,
       layerCount: this.nodeWithPortPoints.portPoints.reduce(
         (max, p) => Math.max(max, (p.z ?? 0) + 1),

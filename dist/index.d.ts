@@ -1273,6 +1273,7 @@ declare class IntraNodeRouteSolver extends BaseSolver {
     viaDiameter: number;
     traceWidth: number;
     obstacleMargin: number;
+    externalObstacleRoutes: HighDensityIntraNodeRoute$1[];
     rerouteAttemptsByConnection: Map<string, number>;
     POSTROUTE_VIA_TRACE_CLEARANCE: number;
     MAX_POSTROUTE_REPAIR_ATTEMPTS: number;
@@ -1289,6 +1290,7 @@ declare class IntraNodeRouteSolver extends BaseSolver {
         traceWidth?: number;
         obstacleMargin?: number;
         obstacles?: Obstacle[];
+        externalObstacleRoutes?: HighDensityIntraNodeRoute$1[];
         layerCount?: number;
     });
     computeProgress(): number;
@@ -1792,6 +1794,9 @@ declare class HighDensitySolver extends BaseSolver {
     growShrinkFallbackToInvalidGeometryOnFailure: boolean;
     failedSolvers: HighDensityIntraNodeSolver[];
     activeSubSolver: HighDensityIntraNodeSolver | null;
+    private activeNode;
+    private activeNodeUsedExternalObstacles;
+    private externalObstacleRetryNodeIds;
     connMap?: ConnectivityMap;
     nodePfById: Map<CapacityMeshNodeId, number | null>;
     nodeSolveMetadataById: Map<CapacityMeshNodeId, {

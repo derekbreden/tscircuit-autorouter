@@ -3,6 +3,7 @@ import type { GraphicsObject } from "graphics-debug"
 import { getGlobalInMemoryCache } from "lib/cache/setupGlobalCaches"
 import type { CapacityMeshNodeId } from "lib/types/capacity-mesh-types"
 import { combineVisualizations } from "lib/utils/combineVisualizations"
+import { getBoundsFromNodeWithPortPoints } from "lib/utils/getBoundsFromNodeWithPortPoints"
 import { mergeRouteSegments } from "lib/utils/mergeRouteSegments"
 import type {
   HighDensityIntraNodeRoute,
@@ -63,6 +64,12 @@ export class HighDensitySolver extends BaseSolver {
 
   failedSolvers: HighDensityIntraNodeSolver[]
   activeSubSolver: HighDensityIntraNodeSolver | null = null
+  // Graceful degradation for cross-node obstacle awareness: the node currently
+  // being solved, whether it was given neighbouring copper as obstacles, and the
+  // nodes already retried without that copper after a failure.
+  private activeNode: NodeWithPortPoints | null = null
+  private activeNodeUsedExternalObstacles = false
+  private externalObstacleRetryNodeIds = new Set<CapacityMeshNodeId>()
   connMap?: ConnectivityMap
   nodePfById: Map<CapacityMeshNodeId, number | null>
   nodeSolveMetadataById: Map<
@@ -286,10 +293,27 @@ export class HighDensitySolver extends BaseSolver {
         this.recordResizeStats(this.activeSubSolver)
         this.activeSubSolver = null
       } else if (this.activeSubSolver.failed) {
-        this.recordNodeSolveMetadata(this.activeSubSolver, "failed")
-        this.recordResizeStats(this.activeSubSolver)
-        this.failedSolvers.push(this.activeSubSolver)
-        this.activeSubSolver = null
+        if (
+          this.activeNode &&
+          this.activeNodeUsedExternalObstacles &&
+          !this.externalObstacleRetryNodeIds.has(
+            this.activeNode.capacityMeshNodeId,
+          )
+        ) {
+          // The cross-node obstacles over-constrained this node. Retry it once
+          // without them (the original per-node behaviour) so the feature can
+          // never turn a routable node into a failed one.
+          this.externalObstacleRetryNodeIds.add(
+            this.activeNode.capacityMeshNodeId,
+          )
+          this.unsolvedNodePortPoints.push(this.activeNode)
+          this.activeSubSolver = null
+        } else {
+          this.recordNodeSolveMetadata(this.activeSubSolver, "failed")
+          this.recordResizeStats(this.activeSubSolver)
+          this.failedSolvers.push(this.activeSubSolver)
+          this.activeSubSolver = null
+        }
       }
       this.updateCacheStats()
       return
@@ -309,6 +333,41 @@ export class HighDensitySolver extends BaseSolver {
       return
     }
     const node = this.unsolvedNodePortPoints.pop()!
+    this.activeNode = node
+
+    // Copper already routed in other nodes that lies near this node's bounds.
+    // The intra-node solver is blind to cross-node copper, so feeding the
+    // neighbours in as obstacle routes lets it clear foreign traces/vias that
+    // sit across a node boundary — whichever of two conflicting nodes is solved
+    // second sees the first and routes (or places its via) to clear 0.15. If the
+    // node then fails to route, it's retried once with this disabled (see the
+    // failure branch above), so cross-node awareness never costs routability.
+    const useExternalObstacles = !this.externalObstacleRetryNodeIds.has(
+      node.capacityMeshNodeId,
+    )
+    const nodeBounds = getBoundsFromNodeWithPortPoints(node)
+    const reach = this.obstacleMargin + this.viaDiameter + this.traceWidth
+    const externalObstacleRoutes = useExternalObstacles
+      ? this.routes.filter((route) => {
+          let rMinX = Infinity
+          let rMaxX = -Infinity
+          let rMinY = Infinity
+          let rMaxY = -Infinity
+          for (const p of route.route) {
+            if (p.x < rMinX) rMinX = p.x
+            if (p.x > rMaxX) rMaxX = p.x
+            if (p.y < rMinY) rMinY = p.y
+            if (p.y > rMaxY) rMaxY = p.y
+          }
+          return (
+            rMinX <= nodeBounds.maxX + reach &&
+            rMaxX >= nodeBounds.minX - reach &&
+            rMinY <= nodeBounds.maxY + reach &&
+            rMaxY >= nodeBounds.minY - reach
+          )
+        })
+      : []
+    this.activeNodeUsedExternalObstacles = externalObstacleRoutes.length > 0
 
     const intraNodeSolverParams = {
       nodeWithPortPoints: node,
@@ -319,6 +378,7 @@ export class HighDensitySolver extends BaseSolver {
       obstacleMargin: this.obstacleMargin,
       effort: this.effort,
       obstacles: this.obstacles,
+      externalObstacleRoutes,
       layerCount: this.layerCount,
       maxInnerIterationsPerGrowthAttempt:
         this.growShrinkMaxInnerIterationsPerGrowthAttempt,
