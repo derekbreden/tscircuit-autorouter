@@ -25,6 +25,8 @@ export class MultiSimplifiedPathSolver extends BaseSolver {
   colorMap: Record<string, string>
   outline?: Array<{ x: number; y: number }>
   defaultViaDiameter: number
+  obstacleMargin?: number
+  traceThickness?: number
 
   constructor(params: {
     unsimplifiedHdRoutes: HighDensityIntraNodeRoute[]
@@ -33,10 +35,14 @@ export class MultiSimplifiedPathSolver extends BaseSolver {
     colorMap?: Record<string, string>
     outline?: Array<{ x: number; y: number }>
     defaultViaDiameter?: number
+    obstacleMargin?: number
+    traceThickness?: number
   }) {
     super()
     this.MAX_ITERATIONS = 100e6
 
+    this.obstacleMargin = params.obstacleMargin
+    this.traceThickness = params.traceThickness
     this.unsimplifiedHdRoutes = params.unsimplifiedHdRoutes
     const inferredLayerCount =
       Math.max(
@@ -75,6 +81,8 @@ export class MultiSimplifiedPathSolver extends BaseSolver {
         connMap: this.connMap,
         colorMap: this.colorMap,
         outline: this.outline,
+        obstacleMargin: this.obstacleMargin,
+        traceThickness: this.traceThickness,
       })
       this.currentUnsimplifiedHdRouteIndex++
       return

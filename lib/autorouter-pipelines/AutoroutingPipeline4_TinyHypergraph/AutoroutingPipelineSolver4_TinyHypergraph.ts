@@ -418,7 +418,13 @@ export class AutoroutingPipelineSolver4_TinyHypergraph extends BaseSolver {
           outline: cms.srj.outline,
           defaultViaDiameter: cms.viaDiameter,
           layerCount: cms.srj.layerCount,
-          minTraceToPadEdgeClearance: cms.srj.minTraceToPadEdgeClearance,
+          // The path simplifier holds this clearance and the trace width around
+          // pads/vias/traces while straightening.
+          minTraceToPadEdgeClearance:
+            cms.srj.minTraceToPadEdgeClearance ??
+            cms.srj.minTraceClearance ??
+            0.15,
+          minTraceWidth: cms.minTraceWidth,
           iterations: 2,
         },
       ],

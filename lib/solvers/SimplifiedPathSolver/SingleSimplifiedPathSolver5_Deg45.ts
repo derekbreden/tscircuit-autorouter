@@ -74,6 +74,11 @@ export class SingleSimplifiedPathSolver5 extends SingleSimplifiedPathSolver {
   ) {
     super(params)
 
+    // obstacleMargin / traceThickness set the trace-edge-to-obstacle clearance and the
+    // trace width the segment-validity checks reserve while straightening.
+    if (params.obstacleMargin != null) this.OBSTACLE_MARGIN = params.obstacleMargin
+    if (params.traceThickness != null) this.TRACE_THICKNESS = params.traceThickness
+
     this.cachedValidPathSegments = new Set()
 
     // Handle empty or single-point routes

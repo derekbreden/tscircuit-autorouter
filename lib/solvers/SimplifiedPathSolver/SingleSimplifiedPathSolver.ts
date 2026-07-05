@@ -28,6 +28,10 @@ export class SingleSimplifiedPathSolver extends BaseSolver {
   connMap: ConnectivityMap
   colorMap: Record<string, string>
   outline?: Array<{ x: number; y: number }>
+  /** Min trace-edge-to-obstacle clearance to hold while simplifying (default 0.1). */
+  obstacleMargin?: number
+  /** Trace width to reserve when checking clearance (default 0.15). */
+  traceThickness?: number
 
   constructor(params: {
     inputRoute: HighDensityIntraNodeRoute
@@ -36,6 +40,8 @@ export class SingleSimplifiedPathSolver extends BaseSolver {
     connMap: ConnectivityMap
     colorMap: Record<string, string>
     outline?: Array<{ x: number; y: number }>
+    obstacleMargin?: number
+    traceThickness?: number
   }) {
     super()
 
@@ -45,6 +51,8 @@ export class SingleSimplifiedPathSolver extends BaseSolver {
     this.connMap = params.connMap
     this.colorMap = params.colorMap
     this.outline = params.outline
+    this.obstacleMargin = params.obstacleMargin
+    this.traceThickness = params.traceThickness
 
     this.newRoute = [this.inputRoute.route[0]]
     this.newVias = []
@@ -58,6 +66,8 @@ export class SingleSimplifiedPathSolver extends BaseSolver {
       connMap: this.connMap.netMap,
       colorMap: this.colorMap,
       outline: this.outline,
+      obstacleMargin: this.obstacleMargin,
+      traceThickness: this.traceThickness,
     }
   }
 

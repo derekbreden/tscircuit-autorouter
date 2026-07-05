@@ -2432,6 +2432,7 @@ declare class TraceSimplificationSolver extends BaseSolver {
         readonly defaultViaDiameter: number;
         readonly layerCount: number;
         readonly minTraceToPadEdgeClearance?: number;
+        readonly minTraceWidth?: number;
     });
     private isSameNetObstacle;
     private getSameNetObstacleForSegment;
@@ -5988,6 +5989,10 @@ declare class SingleSimplifiedPathSolver extends BaseSolver {
         x: number;
         y: number;
     }>;
+    /** Min trace-edge-to-obstacle clearance to hold while simplifying (default 0.1). */
+    obstacleMargin?: number;
+    /** Trace width to reserve when checking clearance (default 0.15). */
+    traceThickness?: number;
     constructor(params: {
         inputRoute: HighDensityIntraNodeRoute$1;
         otherHdRoutes: HighDensityIntraNodeRoute$1[];
@@ -5998,6 +6003,8 @@ declare class SingleSimplifiedPathSolver extends BaseSolver {
             x: number;
             y: number;
         }>;
+        obstacleMargin?: number;
+        traceThickness?: number;
     });
     getConstructorParams(): {
         inputRoute: HighDensityIntraNodeRoute$1;
@@ -6009,6 +6016,8 @@ declare class SingleSimplifiedPathSolver extends BaseSolver {
             x: number;
             y: number;
         }[] | undefined;
+        obstacleMargin: number | undefined;
+        traceThickness: number | undefined;
     };
     get simplifiedRoute(): HighDensityIntraNodeRoute$1;
     isValidPath(pointsInRoute: Point[]): boolean;
@@ -6030,6 +6039,8 @@ declare class MultiSimplifiedPathSolver extends BaseSolver {
         y: number;
     }>;
     defaultViaDiameter: number;
+    obstacleMargin?: number;
+    traceThickness?: number;
     constructor(params: {
         unsimplifiedHdRoutes: HighDensityIntraNodeRoute$1[];
         obstacles: Obstacle[];
@@ -6040,6 +6051,8 @@ declare class MultiSimplifiedPathSolver extends BaseSolver {
             y: number;
         }>;
         defaultViaDiameter?: number;
+        obstacleMargin?: number;
+        traceThickness?: number;
     });
     _step(): void;
     visualize(): GraphicsObject;
