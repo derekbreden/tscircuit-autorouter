@@ -73,6 +73,16 @@ export interface SimpleRouteJson {
    * and emitted vias span top↔bottom. "any" (default): blind/buried vias between any layers.
    */
   viaMode?: "through-hole" | "any"
+  /**
+   * When true, a post-routing pass pulls a route's first/last layer-transition via onto its
+   * terminal SMD pad (via-in-pad) whenever the via sits only a short same-layer hop off the pad
+   * and the pad's barrel column plus the replacement segment clear all foreign copper. The mesh
+   * never births a via in a pad (the pad occupies its layer), so the router lands the transition
+   * via a hop into the trace; this rewrite moves it back onto the pad where that is provably
+   * clear, leaving genuine mid-channel vias untouched. Off by default → identical to upstream.
+   * Requires filled/capped vias at fab (the via is drilled through the solderable pad).
+   */
+  viaInPad?: boolean
 }
 
 export interface Obstacle {

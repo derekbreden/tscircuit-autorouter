@@ -25,6 +25,7 @@ import {
 } from "lib/types/high-density-types"
 import { combineVisualizations } from "lib/utils/combineVisualizations"
 import { convertHdRouteToSimplifiedRoute } from "lib/utils/convertHdRouteToSimplifiedRoute"
+import { pullTerminalViasIntoPads } from "lib/utils/pullTerminalViasIntoPads"
 import { convertSrjToGraphicsObject } from "lib/utils/convertSrjToGraphicsObject"
 import { createObstacleLabelFormatter } from "lib/utils/formatObstacleLabel"
 import { getConnectivityMapFromSimpleRouteJson } from "lib/utils/getConnectivityMapFromSimpleRouteJson"
@@ -763,7 +764,25 @@ export class AutoroutingPipelineSolver4_TinyHypergraph extends BaseSolver {
     }
 
     const traces: SimplifiedPcbTraces = []
-    const allHdRoutes = this._getOutputHdRoutes()
+    let allHdRoutes = this._getOutputHdRoutes()
+
+    if (this.srj.viaInPad) {
+      // Move each route's first/last transition via onto its terminal SMD pad where the barrel
+      // column and the replacement segment provably clear all foreign copper (see
+      // pullTerminalViasIntoPads). Pours are handled downstream (antipad/carve); clearance.ts is
+      // the final referee.
+      allHdRoutes = pullTerminalViasIntoPads(allHdRoutes, {
+        obstacles: this.srj.obstacles,
+        connMap: this.connMap,
+        layerCount: this.srj.layerCount,
+        viaDiameter: this.viaDiameter,
+        clearance: Math.max(
+          0.15,
+          this.srj.minTraceClearance ?? 0,
+          this.srj.minTraceToPadEdgeClearance ?? 0,
+        ),
+      })
+    }
 
     for (const connection of this.netToPointPairsSolver?.newConnections ?? []) {
       const netConnectionName =
