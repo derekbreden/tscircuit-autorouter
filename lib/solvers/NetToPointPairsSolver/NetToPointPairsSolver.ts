@@ -96,6 +96,83 @@ const getTraceConnectedPointGroups = (
   return routedTraceGroups
 }
 
+// True when segment a→b passes through the axis-aligned box centred at (cx,cy) with half-extents
+// (hx,hy). Endpoints inside count; otherwise slab-clip the segment against the box.
+const segmentIntersectsBox = (
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  cx: number,
+  cy: number,
+  hx: number,
+  hy: number,
+): boolean => {
+  const minX = cx - hx, maxX = cx + hx, minY = cy - hy, maxY = cy + hy
+  const inside = (p: { x: number; y: number }) =>
+    p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY
+  if (inside(a) || inside(b)) return true
+  const dx = b.x - a.x, dy = b.y - a.y
+  let t0 = 0, t1 = 1
+  for (const [p, q] of [
+    [-dx, a.x - minX],
+    [dx, maxX - a.x],
+    [-dy, a.y - minY],
+    [dy, maxY - a.y],
+  ] as const) {
+    if (p === 0) {
+      if (q < 0) return false
+      continue
+    }
+    const r = q / p
+    if (p < 0) {
+      if (r > t1) return false
+      if (r > t0) t0 = r
+    } else {
+      if (r < t0) return false
+      if (r < t1) t1 = r
+    }
+  }
+  return t0 <= t1
+}
+
+// A same-net edge is "blocked" when its straight span runs through a foreign-net pad's keepout. The
+// net's own ids come from the obstacles sitting on the connection's points, so any obstacle sharing
+// none of them is foreign; pours are skipped (their antipads carve their own clearance).
+export const buildForeignBlockagePredicate = (
+  srj: SimpleRouteJson,
+  connection: SimpleRouteConnection,
+): ((a: ConnectionPoint, b: ConnectionPoint) => boolean) | undefined => {
+  const obstacles = srj.obstacles ?? []
+  if (!obstacles.length) return undefined
+  const pts = connection.pointsToConnect
+  const onPoint = (o: (typeof obstacles)[number]) =>
+    pts.some((p) => Math.abs(o.center.x - p.x) < 0.05 && Math.abs(o.center.y - p.y) < 0.05)
+  const netIds = new Set<string>()
+  for (const o of obstacles) if (!o.isCopperPour && onPoint(o)) for (const id of o.connectedTo ?? []) netIds.add(id)
+  if (netIds.size === 0) return undefined
+  const foreign = obstacles.filter(
+    (o) => !o.isCopperPour && !(o.connectedTo ?? []).some((id) => netIds.has(id)),
+  )
+  if (foreign.length === 0) return undefined
+  const margin =
+    (srj.minTraceWidth ?? 0.2) / 2 +
+    (srj.minTraceClearance ?? srj.minTraceToPadEdgeClearance ?? 0.15)
+  // Only a CRAMPED edge is blocked: the foreign pad lies on the run AND both endpoints hug that same
+  // pad (each within a pad-radius+clearance of its centre). That is the no-detour-room case — two
+  // pads with a foreign pad between them. An edge that merely grazes a foreign pad on a long span
+  // has room to route around it and is left alone, so the decomposition changes only where it must.
+  return (a, b) =>
+    foreign.some((o) => {
+      const reach = Math.max(o.width, o.height) / 2 + margin
+      const da = Math.hypot(a.x - o.center.x, a.y - o.center.y)
+      const db = Math.hypot(b.x - o.center.x, b.y - o.center.y)
+      return (
+        da <= reach &&
+        db <= reach &&
+        segmentIntersectsBox(a, b, o.center.x, o.center.y, o.width / 2 + margin, o.height / 2 + margin)
+      )
+    })
+}
+
 export const areExternallyConnected = (
   pointIdToGroup: Map<string, number>,
   a: { pointId?: string },
@@ -172,6 +249,7 @@ export class NetToPointPairsSolver extends BaseSolver {
 
     const edges = buildMinimumSpanningTree(connection.pointsToConnect, {
       extraEdges: zeroWeightEdges,
+      isBlockedEdge: buildForeignBlockagePredicate(this.ogSrj, connection),
     })
 
     let mstIdx = 0

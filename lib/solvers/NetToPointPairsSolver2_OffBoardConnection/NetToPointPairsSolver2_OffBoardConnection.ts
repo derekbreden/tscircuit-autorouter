@@ -6,6 +6,7 @@ import {
 import { DSU } from "lib/utils/dsu"
 import {
   areExternallyConnected,
+  buildForeignBlockagePredicate,
   getExternalConnectionState,
   NetToPointPairsSolver,
 } from "../NetToPointPairsSolver/NetToPointPairsSolver"
@@ -155,7 +156,13 @@ export class NetToPointPairsSolver2_OffBoardConnection extends NetToPointPairsSo
 
     const minimumSpanningTreeEdges = buildMinimumSpanningTree(
       currentConnection.pointsToConnect,
-      { extraEdges: zeroWeightEdges },
+      {
+        extraEdges: zeroWeightEdges,
+        isBlockedEdge: buildForeignBlockagePredicate(
+          this.ogSrj,
+          currentConnection,
+        ),
+      },
     )
 
     let mstEdgeIndex = 0

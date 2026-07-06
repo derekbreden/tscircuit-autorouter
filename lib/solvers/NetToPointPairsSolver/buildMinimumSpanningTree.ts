@@ -249,7 +249,18 @@ interface Edge<T extends Point> {
 
 interface BuildMinimumSpanningTreeOptions<T extends Point> {
   extraEdges?: Edge<T>[]
+  /**
+   * True when the straight run between two same-net points passes through foreign copper. Such an
+   * edge sorts after every clear edge, and among blocked edges the LONGER span sorts first — a
+   * wider gap gives the router room to detour the blockage, where a short one (two pads with a
+   * foreign pad between them) leaves none and strands a pad.
+   */
+  isBlockedEdge?: (from: T, to: T) => boolean
 }
+
+// A blocked edge's sort weight sits above every real (mm-scale) clear-edge distance, so Kruskal
+// exhausts clear edges first; subtracting the span makes longer blocked edges rank ahead of shorter.
+const BLOCKED_EDGE_BASE = 1e6
 
 // Main function to build a minimum spanning tree using Kruskal's algorithm
 export function buildMinimumSpanningTree<T extends Point>(
@@ -284,10 +295,11 @@ export function buildMinimumSpanningTree<T extends Point>(
         (point.x - neighbor.x) ** 2 + (point.y - neighbor.y) ** 2,
       )
 
+      const blocked = opts.isBlockedEdge?.(point, neighbor as T) ?? false
       edges.push({
         from: point,
         to: neighbor as T,
-        weight: distance,
+        weight: blocked ? BLOCKED_EDGE_BASE - distance : distance,
       })
     }
   }
