@@ -197,14 +197,18 @@ export class AutoroutingPipelineSolver4_TinyHypergraph extends BaseSolver {
         {
           simpleRouteJson: cms.srjWithPointPairs! as any,
           maxGapFillPasses: 4,
-          // Reserve the trace clearance around every obstacle when the routable
-          // mesh is built, so nodes — and therefore the port points, pathing
-          // corridors and high-density drawing space derived from them — all stay
-          // clear of pads. Without this the mesh lets routing abut pad edges and
-          // the high-density stage (which is blind to pads) can draw a trace
-          // grazing a foreign pad. Reserving it here makes every later stage pick
-          // pad-clearing routes/vias/layers in the first place.
-          obstacleClearance: cms.srj.minTraceClearance ?? 0.15,
+          // Reserve clearance around every obstacle when the routable mesh is built,
+          // so nodes — and therefore the port points, pathing corridors and high-
+          // density drawing space derived from them — all stay clear of pads. The
+          // reserve is the clearance PLUS the trace half-width: routing keeps its
+          // centreline inside the mesh, so reserving only the edge clearance lets the
+          // trace's own body reach clearance − halfWidth of a pad. Adding the half-
+          // width makes the trace EDGE (not its centreline) clear the pad by the
+          // full clearance, so pad clearance stops depending on where the centreline
+          // happens to land in the routable space.
+          obstacleClearance:
+            (cms.srj.minTraceClearance ?? 0.15) +
+            (cms.srj.minTraceWidth ?? 0.2) / 2,
         },
       ],
       {
