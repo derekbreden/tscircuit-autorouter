@@ -214,6 +214,40 @@ const collectForeign = (
  * The via barrel (all layers, radius `viaR`) at `at`, and the replacement segment `at`→`toward`
  * on layer `segZ` (radius `segR`), must clear every foreign feature by `clearance`.
  */
+type Foreign = {
+  obstacles: ForeignObstacle[]
+  segs: ForeignSeg[]
+  vias: ForeignVia[]
+}
+
+/** A wire segment a→b on layer `z` (radius `segR`) clears all foreign copper by `clearance`. */
+const segClearOfForeign = (
+  a: Pt,
+  b: Pt,
+  z: number,
+  segR: number,
+  clearance: number,
+  foreign: Foreign,
+): boolean => {
+  for (const o of foreign.obstacles) {
+    if (!o.zSet.has(z)) continue
+    if (segToAabb(a, b, o.box) < segR + clearance - EPS) return false
+  }
+  for (const s of foreign.segs) {
+    if (s.z !== z) continue
+    if (
+      segSeg(a, b, { x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }) <
+      segR + s.r + clearance - EPS
+    )
+      return false
+  }
+  for (const v of foreign.vias) {
+    if (pointToSeg({ x: v.x, y: v.y }, a, b) < segR + v.r + clearance - EPS)
+      return false
+  }
+  return true
+}
+
 const isPullClear = (
   at: Pt,
   toward: Pt,
@@ -221,7 +255,7 @@ const isPullClear = (
   viaR: number,
   segR: number,
   clearance: number,
-  foreign: { obstacles: ForeignObstacle[]; segs: ForeignSeg[]; vias: ForeignVia[] },
+  foreign: Foreign,
 ): boolean => {
   // Moved via — a full-column barrel, so it must clear foreign copper on every layer.
   for (const o of foreign.obstacles) {
@@ -238,25 +272,8 @@ const isPullClear = (
     if (Math.hypot(at.x - v.x, at.y - v.y) < viaR + v.r + clearance - EPS)
       return false
   }
-
   // Replacement segment — copper only on segZ.
-  for (const o of foreign.obstacles) {
-    if (!o.zSet.has(segZ)) continue
-    if (segToAabb(at, toward, o.box) < segR + clearance - EPS) return false
-  }
-  for (const s of foreign.segs) {
-    if (s.z !== segZ) continue
-    if (
-      segSeg(at, toward, { x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }) <
-      segR + s.r + clearance - EPS
-    )
-      return false
-  }
-  for (const v of foreign.vias) {
-    if (pointToSeg({ x: v.x, y: v.y }, at, toward) < segR + v.r + clearance - EPS)
-      return false
-  }
-  return true
+  return segClearOfForeign(at, toward, segZ, segR, clearance, foreign)
 }
 
 const findTerminalPad = (
@@ -312,6 +329,37 @@ export const pullTerminalViasIntoPads = (
       return n
     }
 
+    // Once the via lands on the pad, the wire leaving it may still detour out to the old via
+    // location (that dip existed only to reach a via-capable spot off the pad). Pull that run taut:
+    // starting from the pad's via-exit point (`anchor`), drop leading same-layer vertices whose
+    // straight shortcut from the anchor clears foreign copper — bounded to vertices within
+    // maxPullDistance of the pad, so it's a local cleanup of the detour, not a global re-route.
+    // `dir` is +1 to walk forward from a start-pad anchor, -1 to walk back from an end-pad anchor.
+    const tautenRunFromPad = (
+      ptsIn: HighDensityIntraNodeRoute["route"],
+      anchor: HighDensityIntraNodeRoute["route"][number],
+      dir: 1 | -1,
+    ): HighDensityIntraNodeRoute["route"] => {
+      const z = anchor.z
+      const result = ptsIn.slice()
+      while (true) {
+        const aIdx = result.indexOf(anchor)
+        if (aIdx === -1) break
+        const dropIdx = aIdx + dir
+        const nextIdx = aIdx + 2 * dir
+        if (dropIdx < 0 || dropIdx >= result.length) break
+        if (nextIdx < 0 || nextIdx >= result.length) break
+        const drop = result[dropIdx]
+        const next = result[nextIdx]
+        if (drop.z !== z || next.z !== z) break
+        if (Math.hypot(drop.x - anchor.x, drop.y - anchor.y) > maxPullDistance)
+          break
+        if (!segClearOfForeign(anchor, next, z, segR, clearance, foreign)) break
+        result.splice(dropIdx, 1)
+      }
+      return result
+    }
+
     // ---- START: pull the first transition via onto the start pad ----
     let startPulled = false
     {
@@ -339,9 +387,11 @@ export const pullTerminalViasIntoPads = (
         ) {
           // pad(startZ) → via@pad(startZ→newZ) → newseg to old via XY → rest on newZ
           const rest = pts.slice(vi)
-          route.route = [pts[0], { x: pad.x, y: pad.y, z: newZ }, ...rest]
+          const viaExit = { x: pad.x, y: pad.y, z: newZ }
+          route.route = [pts[0], viaExit, ...rest]
           removeViaAt(route.vias, { x: via.x, y: via.y })
           route.vias.push({ x: pad.x, y: pad.y })
+          route.route = tautenRunFromPad(route.route, viaExit, 1)
           startPulled = true
         }
       }
@@ -377,9 +427,11 @@ export const pullTerminalViasIntoPads = (
         ) {
           // head up to the pre-terminal via XY (preZ) → newseg to pad → via@pad(preZ→endZ)
           const head = pts.slice(0, ci)
-          route.route = [...head, { x: pad.x, y: pad.y, z: preZ }, pts[last]]
+          const viaExit = { x: pad.x, y: pad.y, z: preZ }
+          route.route = [...head, viaExit, pts[last]]
           removeViaAt(route.vias, { x: via.x, y: via.y })
           route.vias.push({ x: pad.x, y: pad.y })
+          route.route = tautenRunFromPad(route.route, viaExit, -1)
         }
       }
     }
