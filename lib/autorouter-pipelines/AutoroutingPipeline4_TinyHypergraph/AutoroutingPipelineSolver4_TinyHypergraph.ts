@@ -209,6 +209,10 @@ export class AutoroutingPipelineSolver4_TinyHypergraph extends BaseSolver {
           obstacleClearance:
             (cms.srj.minTraceClearance ?? 0.15) +
             (cms.srj.minTraceWidth ?? 0.2) / 2,
+          // Via-capability additionally reserves the via radius (not just the trace half-width)
+          // around pads, so a through-hole via's annular ring clears foreign pads by the full
+          // clearance — see rectdiff's carveViaClearance.
+          viaDiameter: cms.viaDiameter,
         },
       ],
       {
