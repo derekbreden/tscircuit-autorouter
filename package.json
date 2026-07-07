@@ -40,7 +40,7 @@
     "@tscircuit/jumper-topology-generator": "^0.0.4",
     "@tscircuit/krt-wasm": "^0.1.0",
     "@tscircuit/math-utils": "^0.0.36",
-    "@tscircuit/rectdiff": "git+https://github.com/derekbreden/rectdiff.git#15457896bc15115d00e97196ee352cf264bff682",
+    "@tscircuit/rectdiff": "git+https://github.com/derekbreden/rectdiff.git#a35d2c38e7c2acb5519b86d7674e1bd2d94b5926",
     "@tscircuit/solver-utils": "^0.0.16",
     "@types/bun": "^1.2.23",
     "@types/fast-json-stable-stringify": "^2.1.2",
